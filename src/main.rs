@@ -64,13 +64,14 @@ enum Commands {
 /// Use the environment variable BM_ENV if it's defined.
 /// Otherwise, look in the user's home directory for `BM_FILENAME`.
 /// If there is no `HOME` directory, then look in the current directory.
-fn bookmark_file_path() -> PathBuf {
-    env::var(BM_ENV)
-	.map(PathBuf::from)
-	.unwrap_or_else(|_| {
-	    env::home_dir().or(env::current_dir().ok()).unwrap_or_else(||
-	    ".".into()).join(BM_FILENAME)
-	})
+fn bookmark_file_path() -> io::Result<PathBuf> {
+    Ok(env::var(BM_ENV)
+       .map(PathBuf::from)
+       .unwrap_or_else(|_| {
+	   env::home_dir().or(env::current_dir().ok())
+	       .unwrap_or_else(||
+			       ".".into()).join(BM_FILENAME)
+       }))
 }
 
 /// Load every bookmark in the file, newest → oldest.
@@ -93,7 +94,7 @@ fn add_bookmark(name: &str) -> io::Result<()> {
     let path = env::current_dir()?.display().to_string();
     let bookmark = Bookmark::new(name, path);
 
-    let file_path = bookmark_file_path();
+    let file_path = bookmark_file_path()?;
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
@@ -105,7 +106,7 @@ fn add_bookmark(name: &str) -> io::Result<()> {
 
 /// List all bookmarks to stdout (newest first).
 fn list_bookmarks() -> io::Result<()> {
-    let bookmarks = load_bookmarks(bookmark_file_path())?;
+    let bookmarks = load_bookmarks(bookmark_file_path()?)?;
     for bm in bookmarks {
         println!("{}{}{}", bm.name, DELIM, bm.path);
     }
@@ -127,7 +128,7 @@ fn save_bookmarks<P: AsRef<Path>>(path: P, bookmarks: &[Bookmark]) -> io::Result
 
 /// Print the path for the given bookmark name.
 fn find_bookmark(name: &str) -> io::Result<Option<String>> {
-    let bookmarks = load_bookmarks(bookmark_file_path())?;
+    let bookmarks = load_bookmarks(bookmark_file_path()?)?;
     Ok(bookmarks
         .into_iter()
         .find(|bm| bm.name == name)
@@ -137,7 +138,7 @@ fn find_bookmark(name: &str) -> io::Result<Option<String>> {
 
 /// Remove the newest bookmark and return its path.
 fn pop_bookmark() -> io::Result<Option<String>> {
-    let file_path = bookmark_file_path();
+    let file_path = bookmark_file_path()?;
     let mut bookmarks = load_bookmarks(&file_path)?;
 
     let popped = bookmarks.first().cloned();
