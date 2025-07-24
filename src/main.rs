@@ -1,6 +1,6 @@
 use std::env;
 use std::path::{Path, PathBuf};
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io::{self, BufRead, BufReader, Write};
 use clap::{Parser, Subcommand};
 
@@ -95,7 +95,7 @@ fn add_bookmark(name: &str) -> io::Result<()> {
     let bookmark = Bookmark::new(name, path);
 
     let file_path = bookmark_file_path()?;
-    let mut file = OpenOptions::new()
+    let mut file = File::options()
         .create(true)
         .append(true)
         .open(&file_path)?;
@@ -115,7 +115,7 @@ fn list_bookmarks() -> io::Result<()> {
 
 /// Persist the given bookmarks to disk, oldest → newest.
 fn save_bookmarks<P: AsRef<Path>>(path: P, bookmarks: &[Bookmark]) -> io::Result<()> {
-    let mut file = OpenOptions::new()
+    let mut file = File::options()
         .write(true)
         .create(true)
         .truncate(true)
