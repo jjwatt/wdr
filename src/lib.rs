@@ -146,3 +146,51 @@ pub enum Commands {
     /// Pop the last added bookmark.
     Pop,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_bookmark_file_path_defaults() {
+	// Clear the env variable.
+	unsafe { std::env::remove_var("WDC_BOOKMARK_FILE"); }
+	let path = bookmark_file_path().unwrap();
+	let home_dir = env::home_dir().expect("Home directory not found");
+	let expected = home_dir.join(BM_FILENAME);
+	assert_eq!(path, expected);
+    }
+    #[test]
+    fn test_load_bookmarks_empty_file() {
+        let dir = TempDir::new().unwrap();
+        let file_path = dir.path().join(".bookmarks");
+	// Create an empty file.
+	let _file = File::options()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&file_path);
+	unsafe { std::env::set_var("WDC_BOOKMARK_FILE", &file_path); }
+        let result = load_bookmarks(&file_path);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_add_bookmark_creates_file() {
+        let dir = TempDir::new().unwrap();
+        let file_path = dir.path().join(".bookmarks");
+	// Create an empty file.
+	let _file = File::options()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&file_path);
+	unsafe { std::env::set_var("WDC_BOOKMARK_FILE", &file_path); }
+        add_bookmark("test_bookmark").unwrap();
+        let contents = std::fs::read_to_string(file_path).unwrap();
+        assert!(contents.contains("test_bookmark|"));
+    }
+}
