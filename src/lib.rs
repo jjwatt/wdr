@@ -162,6 +162,7 @@ mod tests {
 	let expected = home_dir.join(BM_FILENAME);
 	assert_eq!(path, expected);
     }
+
     #[test]
     fn test_load_bookmarks_empty_file() {
         let dir = TempDir::new().unwrap();
@@ -183,14 +184,30 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let file_path = dir.path().join(".bookmarks");
 	// Create an empty file.
-	let _file = File::options()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&file_path);
+	let mut file = File::create(&file_path).unwrap();
 	unsafe { std::env::set_var("WDC_BOOKMARK_FILE", &file_path); }
         add_bookmark("test_bookmark").unwrap();
         let contents = std::fs::read_to_string(file_path).unwrap();
         assert!(contents.contains("test_bookmark|"));
+    }
+
+    #[test]
+    fn test_load_ignores_invalid_lines() {
+	let dir = TempDir::new().unwrap();
+	let file_path = dir.path().join(".bookmarks");
+	let mut file = File::create(&file_path).unwrap();
+	writeln!(file, "valid|/path").unwrap();
+	writeln!(file, "invalid line").unwrap();
+	writeln!(file, "different, delimiter, here").unwrap();
+	writeln!(file, "# in case you want comments").unwrap();
+	writeln!(file, "").unwrap();
+
+	unsafe { std::env::set_var("WDC_BOOKMARK_FILE", &file_path); }
+
+	let bookmarks = load_bookmarks(&file_path).unwrap();
+	println!("{:?}", bookmarks);
+	assert_eq!(bookmarks.len(), 1);
+	assert_eq!(bookmarks[0].name, "valid");
+	assert_eq!(bookmarks[0].path, "/path");
     }
 }
