@@ -164,6 +164,15 @@ mod tests {
     }
 
     #[test]
+    fn test_bookmark_file_path_env_override() {
+	let dir = TempDir::new().unwrap();
+	let custom_path = dir.path().join("custom_bookmarks.txt");
+	unsafe { std::env::set_var("WDC_BOOKMARK_FILE", &custom_path); }
+	let path = bookmark_file_path().unwrap();
+	assert_eq!(path, custom_path);
+    }
+
+    #[test]
     fn test_load_bookmarks_empty_file() {
         let dir = TempDir::new().unwrap();
         let file_path = dir.path().join(".bookmarks");
@@ -209,5 +218,15 @@ mod tests {
 	assert_eq!(bookmarks.len(), 1);
 	assert_eq!(bookmarks[0].name, "valid");
 	assert_eq!(bookmarks[0].path, "/path");
+    }
+
+    #[test]
+    fn test_find_bookmark_missing() {
+	let dir = TempDir::new().unwrap();
+	let file_path = dir.path().join(".bookmarks");
+	File::create(&file_path).unwrap();
+	unsafe { std::env::set_var("WDC_BOOKMARK_FILE", &file_path); }
+	let result = find_bookmark("nonexistent").unwrap();
+	assert!(result.is_none());
     }
 }
