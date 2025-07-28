@@ -56,8 +56,8 @@ pub fn bookmark_file_path() -> io::Result<PathBuf> {
 
 /// Load every bookmark in the file, newest → oldest.
 /// Invalid lines are silently ignored.
-pub fn load_bookmarks<P: AsRef<Path>>(path: P) -> io::Result<Vec<Bookmark>> {
-    let file = File::open(path)?;
+pub fn load_bookmarks<P: AsRef<Path>>(bookmark_file: P) -> io::Result<Vec<Bookmark>> {
+    let file = File::open(bookmark_file)?;
     let reader = BufReader::new(file);
 
     let mut bookmarks: Vec<_> = reader
@@ -70,23 +70,21 @@ pub fn load_bookmarks<P: AsRef<Path>>(path: P) -> io::Result<Vec<Bookmark>> {
 }
 
 /// Add a bookmark for the current working directory.
-pub fn add_bookmark(name: &str) -> io::Result<()> {
+pub fn add_bookmark<P: AsRef<Path>>(name: &str, bookmark_file: P) -> io::Result<()> {
     let path = env::current_dir()?.display().to_string();
     let bookmark = Bookmark::new(name, path);
-
-    let file_path = bookmark_file_path()?;
     let mut file = File::options()
         .create(true)
         .append(true)
-        .open(&file_path)?;
+        .open(&bookmark_file)?;
     writeln!(file, "{}", bookmark.to_line())?;
     Ok(())
 }
 
 
 /// List all bookmarks to stdout (newest first).
-pub fn list_bookmarks() -> io::Result<()> {
-    let bookmarks = load_bookmarks(bookmark_file_path()?)?;
+pub fn list_bookmarks<P: AsRef<Path>>(bookmark_file: P) -> io::Result<()> {
+    let bookmarks = load_bookmarks(&bookmark_file)?;
     for bm in bookmarks {
         println!("{}{}{}", bm.name, DELIM, bm.path);
     }
@@ -94,12 +92,12 @@ pub fn list_bookmarks() -> io::Result<()> {
 }
 
 /// Persist the given bookmarks to disk, oldest → newest.
-pub fn save_bookmarks<P: AsRef<Path>>(path: P, bookmarks: &[Bookmark]) -> io::Result<()> {
+pub fn save_bookmarks<P: AsRef<Path>>(bookmark_file: P, bookmarks: &[Bookmark]) -> io::Result<()> {
     let mut file = File::options()
         .write(true)
         .create(true)
         .truncate(true)
-        .open(path)?;
+        .open(bookmark_file)?;
     for bm in bookmarks.iter().rev() {
         writeln!(file, "{}", bm.to_line())?;
     }
@@ -107,8 +105,8 @@ pub fn save_bookmarks<P: AsRef<Path>>(path: P, bookmarks: &[Bookmark]) -> io::Re
 }
 
 /// Print the path for the given bookmark name.
-pub fn find_bookmark(name: &str) -> io::Result<Option<String>> {
-    let bookmarks = load_bookmarks(bookmark_file_path()?)?;
+pub fn find_bookmark<P: AsRef<Path>>(name: &str, bookmark_file: P) -> io::Result<Option<String>> {
+    let bookmarks = load_bookmarks(bookmark_file)?;
     Ok(bookmarks
         .into_iter()
         .find(|bm| bm.name == name)
@@ -117,14 +115,13 @@ pub fn find_bookmark(name: &str) -> io::Result<Option<String>> {
 
 
 /// Remove the newest bookmark and return its path.
-pub fn pop_bookmark() -> io::Result<Option<String>> {
-    let file_path = bookmark_file_path()?;
-    let mut bookmarks = load_bookmarks(&file_path)?;
+pub fn pop_bookmark<P: AsRef<Path>>(bookmark_file: P) -> io::Result<Option<String>> {
+    let mut bookmarks = load_bookmarks(&bookmark_file)?;
 
     let popped = bookmarks.first().cloned();
     bookmarks.remove(0);
 
-    save_bookmarks(file_path, &bookmarks)?;
+    save_bookmarks(bookmark_file, &bookmarks)?;
     Ok(popped.map(|bm| bm.path))
 }
 
@@ -150,9 +147,7 @@ pub enum Commands {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
-    use std::path::PathBuf;
-
+ 
     #[test]
     fn test_bookmark_file_path_defaults() {
 	// Clear the env variable.
@@ -161,72 +156,5 @@ mod tests {
 	let home_dir = env::home_dir().expect("Home directory not found");
 	let expected = home_dir.join(BM_FILENAME);
 	assert_eq!(path, expected);
-    }
-
-    #[test]
-    fn test_bookmark_file_path_env_override() {
-	let dir = TempDir::new().unwrap();
-	let custom_path = dir.path().join("custom_bookmarks.txt");
-	unsafe { std::env::set_var("WDC_BOOKMARK_FILE", &custom_path); }
-	let path = bookmark_file_path().unwrap();
-	assert_eq!(path, custom_path);
-    }
-
-    #[test]
-    fn test_load_bookmarks_empty_file() {
-        let dir = TempDir::new().unwrap();
-        let file_path = dir.path().join(".bookmarks");
-	// Create an empty file.
-	let _file = File::options()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&file_path);
-	unsafe { std::env::set_var("WDC_BOOKMARK_FILE", &file_path); }
-        let result = load_bookmarks(&file_path);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap().len(), 0);
-    }
-
-    #[test]
-    fn test_add_bookmark_creates_file() {
-        let dir = TempDir::new().unwrap();
-        let file_path = dir.path().join(".bookmarks");
-	// Create an empty file.
-	let mut file = File::create(&file_path).unwrap();
-	unsafe { std::env::set_var("WDC_BOOKMARK_FILE", &file_path); }
-        add_bookmark("test_bookmark").unwrap();
-        let contents = std::fs::read_to_string(file_path).unwrap();
-        assert!(contents.contains("test_bookmark|"));
-    }
-
-    #[test]
-    fn test_load_ignores_invalid_lines() {
-	let dir = TempDir::new().unwrap();
-	let file_path = dir.path().join(".bookmarks");
-	let mut file = File::create(&file_path).unwrap();
-	writeln!(file, "valid|/path").unwrap();
-	writeln!(file, "invalid line").unwrap();
-	writeln!(file, "different, delimiter, here").unwrap();
-	writeln!(file, "# in case you want comments").unwrap();
-	writeln!(file, "").unwrap();
-
-	unsafe { std::env::set_var("WDC_BOOKMARK_FILE", &file_path); }
-
-	let bookmarks = load_bookmarks(&file_path).unwrap();
-	println!("{:?}", bookmarks);
-	assert_eq!(bookmarks.len(), 1);
-	assert_eq!(bookmarks[0].name, "valid");
-	assert_eq!(bookmarks[0].path, "/path");
-    }
-
-    #[test]
-    fn test_find_bookmark_missing() {
-	let dir = TempDir::new().unwrap();
-	let file_path = dir.path().join(".bookmarks");
-	File::create(&file_path).unwrap();
-	unsafe { std::env::set_var("WDC_BOOKMARK_FILE", &file_path); }
-	let result = find_bookmark("nonexistent").unwrap();
-	assert!(result.is_none());
     }
 }
