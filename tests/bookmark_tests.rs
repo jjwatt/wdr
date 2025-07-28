@@ -32,33 +32,45 @@ fn test_bookmark_file_path_env_override() {
     });
 }
 
-/// Test bookmark_file_path
-#[test]
-fn test_bookmark_file_path() {
-    // Set environment variable for testing.
-    unsafe { env::set_var("WDC_BOOKMARK_FILE", "/test/path"); }
-    let path = bookmark_file_path().unwrap();
-    assert_eq!(path, Path::new("/test/path"));
-}
-
+#[serial]
 #[test]
 fn test_load_bookmarks_empty_file() {
-    let dir = TempDir::new().unwrap();
-    let file_path = dir.path().join(".bookmarks");
-    // Create an empty file.
-    let _file = File::create(&file_path).unwrap();
-    let result = load_bookmarks(&file_path);
-    assert!(result.is_ok());
-    assert_eq!(result.unwrap().len(), 0);
+    with_test_env(|custom_path| {
+	let bookmark_path = bookmark_file_path().unwrap();
+	let _file = File::create(&bookmark_path).unwrap();
+	let result = load_bookmarks(&bookmark_path);
+	assert!(result.is_ok());
+	assert_eq!(result.unwrap().len(), 0);
+    });
 }
 
+#[serial]
 #[test]
 fn test_add_bookmark_creates_file() {
-    let dir = TempDir::new().unwrap();
-    let file_path = dir.path().join(".bookmarks");
-    // Create an empty file.
-    let mut file = File::create(&file_path).unwrap();
-    add_bookmark("test_bookmark", &file_path).unwrap();
-    let contents = std::fs::read_to_string(file_path).unwrap();
-    assert!(contents.contains("test_bookmark|"));
+    with_test_env(|custom_path| {
+	let bookmark_path = bookmark_file_path().unwrap();
+	let mut _file = File::create(&bookmark_path).unwrap();
+	add_bookmark("test_bookmark", &bookmark_path).unwrap();
+	let contents = std::fs::read_to_string(bookmark_path).unwrap();
+	assert!(contents.contains("test_bookmark|"));
+    });
+}
+
+#[serial]
+#[test]
+fn test_load_ignores_invalid_lines() {
+    with_test_env(|custom_path| {
+	let bookmark_path = bookmark_file_path().unwrap();
+	let mut file = File::create(&bookmark_path).unwrap();
+	writeln!(file, "valid|/path").unwrap();
+	writeln!(file, "invalid line").unwrap();
+	writeln!(file, "different, delimiter, here").unwrap();
+	writeln!(file, "# in case you want comments").unwrap();
+	writeln!(file, "").unwrap();
+	let bookmarks = load_bookmarks(&bookmark_path).unwrap();
+	println!("{:?}", bookmarks);
+	assert_eq!(bookmarks.len(), 1);
+	assert_eq!(bookmarks[0].name, "valid");
+	assert_eq!(bookmarks[0].path, "/path");
+    });
 }
