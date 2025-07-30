@@ -1,8 +1,8 @@
 use wdr::*;
-use std::path::{Path, PathBuf};
-use tempfile::{TempDir, NamedTempFile};
+use std::path::PathBuf;
+use tempfile::TempDir;
 use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::io::Write;
 use std::env;
 use serial_test::serial;
 
@@ -35,7 +35,7 @@ fn test_bookmark_file_path_env_override() {
 #[serial]
 #[test]
 fn test_load_bookmarks_empty_file() {
-    with_test_env(|custom_path| {
+    with_test_env(|_| {
 	let bookmark_path = bookmark_file_path().unwrap();
 	let _file = File::create(&bookmark_path).unwrap();
 	let result = load_bookmarks(&bookmark_path);
@@ -47,7 +47,7 @@ fn test_load_bookmarks_empty_file() {
 #[serial]
 #[test]
 fn test_add_bookmark_creates_file() {
-    with_test_env(|custom_path| {
+    with_test_env(|_| {
 	let bookmark_path = bookmark_file_path().unwrap();
 	let mut _file = File::create(&bookmark_path).unwrap();
 	add_bookmark("test_bookmark", &bookmark_path).unwrap();
@@ -59,7 +59,7 @@ fn test_add_bookmark_creates_file() {
 #[serial]
 #[test]
 fn test_load_ignores_invalid_lines() {
-    with_test_env(|custom_path| {
+    with_test_env(|_| {
 	let bookmark_path = bookmark_file_path().unwrap();
 	let mut file = File::create(&bookmark_path).unwrap();
 	writeln!(file, "valid|/path").unwrap();
@@ -68,9 +68,18 @@ fn test_load_ignores_invalid_lines() {
 	writeln!(file, "# in case you want comments").unwrap();
 	writeln!(file, "").unwrap();
 	let bookmarks = load_bookmarks(&bookmark_path).unwrap();
-	println!("{:?}", bookmarks);
 	assert_eq!(bookmarks.len(), 1);
 	assert_eq!(bookmarks[0].name, "valid");
 	assert_eq!(bookmarks[0].path, "/path");
+    });
+}
+
+#[serial]
+#[test]
+fn test_find_bookmark_missing() {
+    with_test_env(|bookmark_path| {
+	File::create(&bookmark_path).unwrap();
+	let result = find_bookmark("nonexistent", &bookmark_path).unwrap();
+	assert!(result.is_none());
     });
 }
