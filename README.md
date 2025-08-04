@@ -54,6 +54,16 @@ wdr find project1
 wdr pop
 ```
 
+`wdr` is meant to be used with finders like `fzy`[^1]. e.g.,
+
+```console
+goto() {
+    cd "$(wdr list | fzy | cut -d'|' -f2)" || return
+}
+```
+
+[^1]: https://github.com/jhawthorn/fzy
+
 ### Environment Variable
 
 You can customize the location of the bookmarks file using the `WDC_BOOKMARK_FILE` environment variable:
