@@ -15,11 +15,11 @@ where
     let temp_dir = TempDir::new().unwrap();
     let file_path = temp_dir.path().join(".test_bookmarks");
     // Set the env var just for this test.
-    unsafe { std::env::set_var(BM_ENV, &file_path); }
+    unsafe { env::set_var(BM_ENV, &file_path); }
     test_body(file_path);
     match original_val {
-	Ok(val) => unsafe { std::env::set_var(BM_ENV, val) },
-	Err(_) => unsafe  { std::env::remove_var(BM_ENV) },
+	Ok(val) => unsafe { env::set_var(BM_ENV, val) },
+	Err(_) => unsafe  { env::remove_var(BM_ENV) },
     }
 }
 
